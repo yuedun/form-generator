@@ -20,6 +20,7 @@ module.exports = {
     'import/prefer-default-export': 0,
     'no-use-before-define': 0,
     'no-param-reassign': 0,
+    'no-underscore-dangle': 0,
     'arrow-parens': [2, 'as-needed'],
     'vue/max-attributes-per-line': 0,
     'max-len': [
@@ -32,7 +33,8 @@ module.exports = {
     'no-multi-assign': 0,
     'prefer-rest-params': 0,
     'vue/require-prop-types': 0,
-    'no-restricted-globals': 0
+    'no-restricted-globals': 0,
+    'no-multiple-empty-lines': 0
   },
   parserOptions: {
     parser: 'babel-eslint'

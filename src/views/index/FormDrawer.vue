@@ -76,9 +76,7 @@
   </div>
 </template>
 <script>
-import monaco from 'monaco'
 import { parse } from '@babel/parser'
-import beautifier from 'beautifier'
 import ClipboardJS from 'clipboard'
 import { saveAs } from 'file-saver'
 import {
@@ -88,6 +86,8 @@ import { makeUpJs } from '@/components/generator/js'
 import { makeUpCss } from '@/components/generator/css'
 import { exportDefault, beautifierConf, titleCase } from '@/utils/index'
 import ResourceDialog from './ResourceDialog'
+import loadMonaco from '@/utils/loadMonaco'
+import loadBeautifier from '@/utils/loadBeautifier'
 
 const editorObj = {
   html: null,
@@ -99,6 +99,8 @@ const mode = {
   js: 'javascript',
   css: 'css'
 }
+let beautifier
+let monaco
 
 export default {
   components: { ResourceDialog },
@@ -111,9 +113,12 @@ export default {
       cssCode: '',
       codeFrame: '',
       isIframeLoaded: false,
+      isInitcode: false, // 保证open后两个异步只执行一次runcode
+      isRefreshCode: false, // 每次打开都需要重新刷新代码
       resourceVisible: false,
       scripts: [],
-      links: []
+      links: [],
+      monaco: null
     }
   },
   computed: {
@@ -122,10 +127,11 @@ export default {
     }
   },
   watch: {},
-  created() {},
+  created() {
+  },
   mounted() {
     window.addEventListener('keydown', this.preventDefaultSave)
-    const a = new ClipboardJS('.copy-btn', {
+    const clipboard = new ClipboardJS('.copy-btn', {
       text: trigger => {
         const codeStr = this.generateCode()
         this.$notify({
@@ -135,6 +141,9 @@ export default {
         })
         return codeStr
       }
+    })
+    clipboard.on('error', e => {
+      this.$message.error('代码复制失败')
     })
   },
   beforeDestroy() {
@@ -147,25 +156,38 @@ export default {
       }
     },
     onOpen() {
-      setTimeout(() => {
-        const { type } = this.generateConf
-        this.htmlCode = makeUpHtml(this.formData, type)
+      const { type } = this.generateConf
+      this.htmlCode = makeUpHtml(this.formData, type)
+      this.jsCode = makeUpJs(this.formData, type)
+      this.cssCode = makeUpCss(this.formData)
+
+      loadBeautifier(btf => {
+        beautifier = btf
         this.htmlCode = beautifier.html(this.htmlCode, beautifierConf.html)
-        this.jsCode = makeUpJs(this.formData, type)
         this.jsCode = beautifier.js(this.jsCode, beautifierConf.js)
-        this.cssCode = makeUpCss(this.formData)
         this.cssCode = beautifier.css(this.cssCode, beautifierConf.html)
 
-        this.setEditorValue('editorHtml', 'html', this.htmlCode)
-        this.setEditorValue('editorJs', 'js', this.jsCode)
-        this.setEditorValue('editorCss', 'css', this.cssCode)
-        this.isIframeLoaded && this.runCode()
+        loadMonaco(val => {
+          monaco = val
+          this.setEditorValue('editorHtml', 'html', this.htmlCode)
+          this.setEditorValue('editorJs', 'js', this.jsCode)
+          this.setEditorValue('editorCss', 'css', this.cssCode)
+          if (!this.isInitcode) {
+            this.isRefreshCode = true
+            this.isIframeLoaded && (this.isInitcode = true) && this.runCode()
+          }
+        })
       })
     },
-    onClose() {},
+    onClose() {
+      this.isInitcode = false
+      this.isRefreshCode = false
+    },
     iframeLoad() {
-      this.isIframeLoaded = true
-      this.jsCode && this.runCode()
+      if (!this.isInitcode) {
+        this.isIframeLoaded = true
+        this.isRefreshCode && (this.isInitcode = true) && this.runCode()
+      }
     },
     setEditorValue(id, type, codeStr) {
       if (editorObj[type]) {
@@ -178,6 +200,7 @@ export default {
           automaticLayout: true
         })
       }
+      // ctrl + s 刷新
       editorObj[type].onKeyDown(e => {
         if (e.keyCode === 49 && (e.metaKey || e.ctrlKey)) {
           this.runCode()
@@ -268,6 +291,7 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+@import '@/styles/mixin.scss';
 .tab-editor {
   position: absolute;
   top: 33px;
@@ -293,12 +317,6 @@ export default {
 }
 .right-preview {
   height: 100%;
-  .action-bar {
-    height: 33px;
-    background: #f2fafb;
-    padding: 0 15px;
-    box-sizing: border-box;
-  }
   .result-wrapper {
     height: calc(100vh - 33px);
     width: 100%;
@@ -306,31 +324,8 @@ export default {
     padding: 12px;
     box-sizing: border-box;
   }
-  .bar-btn {
-    display: inline-block;
-    padding: 0 6px;
-    line-height: 32px;
-    color: #8285f5;
-    cursor: pointer;
-    font-size: 14px;
-    user-select: none;
-    & i {
-      font-size: 20px;
-    }
-    &:hover {
-      color: #4348d4;
-    }
-  }
-  .bar-btn + .bar-btn {
-    margin-left: 8px;
-  }
-  .delete-btn {
-    color: #f56c6c;
-    &:hover {
-      color: #ea0b30;
-    }
-  }
 }
+@include action-bar;
 ::v-deep .el-drawer__header {
   display: none;
 }
